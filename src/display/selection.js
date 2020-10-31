@@ -4,6 +4,7 @@ import { getLine } from "../line/utils_line.js"
 import { charCoords, cursorCoords, displayWidth, paddingH, wrappedLineExtentChar } from "../measurement/position_measurement.js"
 import { getOrder, iterateBidiSections } from "../util/bidi.js"
 import { elt } from "../util/dom.js"
+import { onBlur } from "./focus.js"
 
 export function updateSelection(cm) {
   cm.display.input.showSelection(cm.display.input.prepareSelection())
@@ -17,7 +18,7 @@ export function prepareSelection(cm, primary = true) {
   for (let i = 0; i < doc.sel.ranges.length; i++) {
     if (!primary && i == doc.sel.primIndex) continue
     let range = doc.sel.ranges[i]
-    if (range.from().line >= cm.display.viewTo || range.to().line < cm.display.viewFrom) continue
+    if (!cm.options.otherCursors && (range.from().line >= cm.display.viewTo || range.to().line < cm.display.viewFrom)) continue
     let collapsed = range.empty()
     if (collapsed || cm.options.showCursorWhenSelecting)
       drawSelectionCursor(cm, range.head, curFragment)
@@ -43,6 +44,20 @@ export function drawSelectionCursor(cm, head, output) {
     otherCursor.style.left = pos.other.left + "px"
     otherCursor.style.top = pos.other.top + "px"
     otherCursor.style.height = (pos.other.bottom - pos.other.top) * .85 + "px"
+  }
+
+  if (cm.options.otherCursors) {
+    var others = cm.display.lineSpace.getElementsByClassName('CodeMirror-other-cursor');
+    for (var i = 0, l = others.length; i < l; i++) {
+        var other = others[i];
+        var line = parseInt(other.getAttribute('data-line'));
+        var ch = parseInt(other.getAttribute('data-ch'));
+        var offsetLeft = parseFloat(other.getAttribute('data-offset-left'));
+        var offsetTop = parseFloat(other.getAttribute('data-offset-top'));
+        var coord = cm.charCoords({line: line, ch: ch}, 'windows');
+        other.style.left = coord.left + offsetLeft + 'px';
+        other.style.top = coord.top + offsetTop + 'px';
+    }
   }
 }
 
@@ -151,8 +166,10 @@ export function restartBlink(cm) {
   let on = true
   display.cursorDiv.style.visibility = ""
   if (cm.options.cursorBlinkRate > 0)
-    display.blinker = setInterval(() => display.cursorDiv.style.visibility = (on = !on) ? "" : "hidden",
-      cm.options.cursorBlinkRate)
+    display.blinker = setInterval(() => {
+      if (!cm.hasFocus()) onBlur(cm)
+      display.cursorDiv.style.visibility = (on = !on) ? "" : "hidden"
+    }, cm.options.cursorBlinkRate)
   else if (cm.options.cursorBlinkRate < 0)
     display.cursorDiv.style.visibility = "hidden"
 }

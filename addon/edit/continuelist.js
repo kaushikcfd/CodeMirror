@@ -11,8 +11,8 @@
 })(function(CodeMirror) {
   "use strict";
 
-  var listRE = /^(\s*)(>[> ]*|[*+-] \[[x ]\]\s|[*+-]\s|(\d+)([.)]))(\s*)/,
-      emptyListRE = /^(\s*)(>[> ]*|[*+-] \[[x ]\]|[*+-]|(\d+)[.)])(\s*)$/,
+  var listRE = /^(\s*)(>[> ]*|[*+-]\s|(\d+)([.)]))(\[\s\]\s|\[x\]\s|\s*)/,
+      emptyListRE = /^(\s*)(>[> ]*|[*+-]\s|(\d+)[.)])(\[\s\]\s*|\[x\]\s|\s*)$/,
       unorderedListRE = /[*+-]\s/;
 
   CodeMirror.commands.newlineAndIndentContinueMarkdownList = function(cm) {
@@ -41,19 +41,28 @@
         return;
       }
       if (emptyListRE.test(line)) {
-        if (!/>\s*$/.test(line)) cm.replaceRange("", {
+        var endOfQuote = inQuote && />\s*$/.test(line)
+        var endOfList = !/>\s*$/.test(line)
+        if (endOfQuote || endOfList) cm.replaceRange("", {
           line: pos.line, ch: 0
         }, {
           line: pos.line, ch: pos.ch + 1
         });
         replacements[i] = "\n";
       } else {
+        var disableAutoIncrement = cm.getOption("disableAutoIncrementMarkdownListNumbers") || false
         var indent = match[1], after = match[5];
         var numbered = !(unorderedListRE.test(match[2]) || match[2].indexOf(">") >= 0);
-        var bullet = numbered ? (parseInt(match[3], 10) + 1) + match[4] : match[2].replace("x", " ");
+        var bullet
+        if (numbered) {
+          bullet = (disableAutoIncrement ? 1 : (parseInt(match[3], 10) + 1)) + match[4];
+        } else {
+          bullet = match[2].replace("x", " ");
+        }
+        after = after.replace('[x]', '[ ]'); // make todo list default unchecked
         replacements[i] = "\n" + indent + bullet + after;
 
-        if (numbered) incrementRemainingMarkdownListNumbers(cm, pos);
+        if (numbered && !disableAutoIncrement) incrementRemainingMarkdownListNumbers(cm, pos);
       }
     }
 
